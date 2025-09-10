@@ -38,10 +38,13 @@ fn issuance_request_benchmark(c: &mut Criterion) {
     c.bench_function("issuance_request", |b| {
         b.iter_batched(
             || {
+                let credit_amount = Scalar::from(thread_rng().gen_range(10..1000) as u64);
                 let preissuance = PreIssuance::random(OsRng);
-                (preissuance, Arc::clone(&params))
+                (preissuance, credit_amount, Arc::clone(&params))
             },
-            |(preissuance, params)| black_box(preissuance.request(&params, OsRng)),
+            |(preissuance, credit_amount, params)| {
+                black_box(preissuance.request(&params, &credit_amount, OsRng))
+            },
             BatchSize::SmallInput,
         )
     });
@@ -56,8 +59,8 @@ fn issuance_benchmark(c: &mut Criterion) {
             || {
                 let private_key = PrivateKey::random(OsRng);
                 let preissuance = PreIssuance::random(OsRng);
-                let issuance_request = preissuance.request(&params, OsRng);
                 let credit_amount = Scalar::from(thread_rng().gen_range(10..1000) as u64);
+                let issuance_request = preissuance.request(&params, &credit_amount, OsRng);
                 (
                     private_key,
                     Arc::clone(&params),
@@ -86,8 +89,8 @@ fn token_creation_benchmark(c: &mut Criterion) {
             || {
                 let private_key = PrivateKey::random(OsRng);
                 let preissuance = PreIssuance::random(OsRng);
-                let issuance_request = preissuance.request(&params, OsRng);
                 let credit_amount = Scalar::from(thread_rng().gen_range(10..1000) as u64);
+                let issuance_request = preissuance.request(&params, &credit_amount, OsRng);
                 let issuance_response = private_key
                     .issue(&params, &issuance_request, credit_amount, OsRng)
                     .unwrap();
@@ -125,10 +128,11 @@ fn spending_proof_benchmark(c: &mut Criterion) {
             || {
                 let private_key = PrivateKey::random(OsRng);
                 let preissuance = PreIssuance::random(OsRng);
-                let issuance_request = preissuance.request(&params, OsRng);
 
                 // Random credit amount between 20 and 1000
                 let credit_amount = Scalar::from(thread_rng().gen_range(20..1000) as u64);
+
+                let issuance_request = preissuance.request(&params, &credit_amount, OsRng);
 
                 let issuance_response = private_key
                     .issue(&params, &issuance_request, credit_amount, OsRng)
@@ -172,10 +176,11 @@ fn refund_benchmark(c: &mut Criterion) {
             || {
                 let private_key = PrivateKey::random(OsRng);
                 let preissuance = PreIssuance::random(OsRng);
-                let issuance_request = preissuance.request(&params, OsRng);
 
                 // Random credit amount between 20 and 1000
                 let credit_amount = Scalar::from(thread_rng().gen_range(20..1000) as u64);
+
+                let issuance_request = preissuance.request(&params, &credit_amount, OsRng);
 
                 let issuance_response = private_key
                     .issue(&params, &issuance_request, credit_amount, OsRng)
@@ -220,10 +225,11 @@ fn refund_token_creation_benchmark(c: &mut Criterion) {
             || {
                 let private_key = PrivateKey::random(OsRng);
                 let preissuance = PreIssuance::random(OsRng);
-                let issuance_request = preissuance.request(&params, OsRng);
 
                 // Random credit amount between 20 and 1000
                 let credit_amount = Scalar::from(thread_rng().gen_range(20..1000) as u64);
+
+                let issuance_request = preissuance.request(&params, &credit_amount, OsRng);
 
                 let issuance_response = private_key
                     .issue(&params, &issuance_request, credit_amount, OsRng)
@@ -250,15 +256,9 @@ fn refund_token_creation_benchmark(c: &mut Criterion) {
 
                 let (spend_proof, prerefund) = credit_token.prove_spend(&params, charge, OsRng);
                 let refund = private_key.refund(&params, &spend_proof, OsRng).unwrap();
-                (
-                    prerefund,
-                    spend_proof,
-                    refund,
-                    private_key,
-                    Arc::clone(&params),
-                )
+                (prerefund, spend_proof, refund, private_key)
             },
-            |(prerefund, spend_proof, refund, private_key, params)| {
+            |(prerefund, spend_proof, refund, private_key)| {
                 black_box(
                     prerefund
                         .to_credit_token(&spend_proof, &refund, private_key.public())

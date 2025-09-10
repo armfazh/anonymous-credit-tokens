@@ -110,12 +110,14 @@ impl IssuanceRequest {
     /// IssuanceRequestMsg = {
     ///     1: bstr,  ; K (compressed Ristretto point, 32 bytes)
     ///     2: bstr   ; pok (bytes, n bytes)
+    ///     3: bstr   ; c (scalar, 32 bytes)
     /// }
     /// ```
     pub fn to_cbor(&self) -> Result<Vec<u8>, CborError> {
         let map = vec![
             (Value::Integer(1.into()), encode_point(&self.big_k)),
             (Value::Integer(2.into()), encode_vec(&self.pok)),
+            (Value::Integer(3.into()), encode_scalar(&self.c)),
         ];
 
         let mut bytes = Vec::new();
@@ -131,11 +133,13 @@ impl IssuanceRequest {
             Value::Map(map) => {
                 let mut big_k = None;
                 let mut pok = None;
+                let mut c = None;
 
                 for (k, v) in map {
                     match k {
                         Value::Integer(i) if i == 1.into() => big_k = Some(decode_point(&v)?),
                         Value::Integer(i) if i == 2.into() => pok = Some(decode_vec(&v)?),
+                        Value::Integer(i) if i == 3.into() => c = Some(decode_scalar(&v)?),
                         _ => {}
                     }
                 }
@@ -143,6 +147,7 @@ impl IssuanceRequest {
                 Ok(IssuanceRequest {
                     big_k: big_k.ok_or(CborError::InvalidStructure("missing field 1 (K)"))?,
                     pok: pok.ok_or(CborError::InvalidStructure("missing field 2 (pok)"))?,
+                    c: c.ok_or(CborError::InvalidStructure("missing field 3 (c)"))?,
                 })
             }
             _ => Err(CborError::InvalidStructure("expected CBOR map")),
@@ -698,14 +703,16 @@ mod tests {
         let big_k = RistrettoPoint::random(&mut OsRng);
         let mut pok = vec![0; 64];
         OsRng.fill_bytes(&mut pok);
+        let c = Scalar::random(&mut OsRng);
 
-        let request = IssuanceRequest { big_k, pok };
+        let request = IssuanceRequest { big_k, pok, c };
 
         let bytes = request.to_cbor().unwrap();
         let decoded = IssuanceRequest::from_cbor(&bytes).unwrap();
 
         assert_eq!(request.big_k, decoded.big_k);
         assert_eq!(request.pok, decoded.pok);
+        assert_eq!(request.c, decoded.c);
     }
 
     #[test]

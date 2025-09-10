@@ -37,12 +37,13 @@ fn main() {
 
     // 2. User Registration/Credit Issuance
     // Client prepares for issuance
+    let credits = Scalar::from(40u64);
     let preissuance = PreIssuance::random(OsRng);
-    let issuance_request = preissuance.request(&params, OsRng);
+    let issuance_request = preissuance.request(&params, &credits, OsRng);
 
     // Server issues 40 credits
     let issuance_response = private_key
-        .issue(&params, &issuance_request, Scalar::from(40u64), OsRng)
+        .issue(&params, &issuance_request, credits, OsRng)
         .unwrap();
 
     // Client receives the credit token
