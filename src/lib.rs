@@ -110,6 +110,7 @@ pub enum Error {
     InvalidClientSpendProof,
     AmountTooBigError,
     ScalarOutOfRangeError,
+    MismatchCredits,
 }
 
 /// The bit length used for binary decomposition of values in range proofs.
@@ -384,6 +385,8 @@ pub struct IssuanceRequest {
     big_k: RistrettoPoint,
     /// Proof of knowledge of the client's identifier and blinding factor
     pok: Vec<u8>,
+    /// The amount of credits requested to the Issuer
+    c: Scalar,
 }
 
 /// The credit token used to store and spend anonymous credits.
@@ -459,10 +462,16 @@ impl PreIssuance {
     /// use rand_core::OsRng;
     ///
     /// let pre_issuance = PreIssuance::random(OsRng);
+    /// let credit_amount = Scalar::from(20u64);
     /// let params = Params::new("test-org", "test-service", "test", "2024-01-01");
-    /// let request = pre_issuance.request(&params, OsRng);
+    /// let request = pre_issuance.request(&params, credit_amount, OsRng);
     /// ```
-    pub fn request(&self, params: &Params, mut rng: impl CryptoRngCore) -> IssuanceRequest {
+    pub fn request(
+        &self,
+        params: &Params,
+        credits: &Scalar,
+        mut rng: impl CryptoRngCore,
+    ) -> IssuanceRequest {
         // Create a commitment to the client's identifier and blinding factor
         let big_k = &params.h2 * &self.k + &params.h3 * &self.r;
 
@@ -478,7 +487,11 @@ impl PreIssuance {
         let witness = vec![self.k, self.r];
         let pok = prover.prove_compact(&witness, &mut rng).unwrap();
 
-        IssuanceRequest { big_k, pok }
+        IssuanceRequest {
+            big_k,
+            pok,
+            c: *credits,
+        }
     }
 
     /// Constructs a credit token from the issuer's response to an issuance request.
@@ -509,8 +522,8 @@ impl PreIssuance {
     /// # let public_key = private_key.public();
     /// # let pre_issuance = PreIssuance::random(OsRng);
     /// # let params = Params::new("test-org", "test-service", "test", "2024-01-01");
-    /// # let request = pre_issuance.request(&params, OsRng);
     /// # let credit_amount = Scalar::from(20u128);
+    /// # let request = pre_issuance.request(&params, &credit_amount, OsRng);
     /// # let response = private_key.issue(&params, &request, credit_amount, OsRng).unwrap();
     /// #
     /// let credit_token = pre_issuance.to_credit_token(
@@ -527,6 +540,11 @@ impl PreIssuance {
         request: &IssuanceRequest,
         response: &IssuanceResponse,
     ) -> Result<CreditToken, Error> {
+        // Verify that the Issuer granted the requested number of credits.
+        if request.c != response.c {
+            return Err(Error::MismatchCredits);
+        }
+
         // Reconstruct the signature base points for verification
         let g = RistrettoPoint::generator();
         let x_a = g + &params.h1 * &response.c + request.big_k;
@@ -581,7 +599,7 @@ impl PrivateKey {
     /// # Arguments
     ///
     /// * `request` - The client's issuance request
-    /// * `c` - The amount of credits to issue
+    /// * `credits` - The amount of credits to issue
     /// * `rng` - A cryptographically secure random number generator
     ///
     /// # Returns
@@ -599,19 +617,23 @@ impl PrivateKey {
     /// # let private_key = PrivateKey::random(OsRng);
     /// # let pre_issuance = PreIssuance::random(OsRng);
     /// # let params = Params::new("test-org", "test-service", "test", "2024-01-01");
-    /// # let request = pre_issuance.request(&params, OsRng);
-    /// #
+    /// # let credit_amount = Scalar::from(20u128);
+    /// # let request = pre_issuance.request(&params, &credit_amount, OsRng);
     /// // Issue 20 credits to the client
-    /// let credit_amount = Scalar::from(20u128);
     /// let response = private_key.issue(&params, &request, credit_amount, OsRng).unwrap();
     /// ```
     pub fn issue(
         &self,
         params: &Params,
         request: &IssuanceRequest,
-        c: Scalar,
+        credits: Scalar,
         mut rng: impl CryptoRngCore,
     ) -> Result<IssuanceResponse, Error> {
+        // Ensure the number of requested credits matches the amount the issuer will grant.
+        if request.c != credits {
+            return Err(Error::MismatchCredits);
+        }
+
         // Verify the client's zero-knowledge proof
         let mut statement = LinearRelation::new();
         proofs::pedersen(
@@ -629,7 +651,7 @@ impl PrivateKey {
         let g = RistrettoPoint::generator();
         let e = Scalar::random(&mut rng);
         let exp = e + self.x;
-        let x_a = g + &params.h1 * &c + request.big_k;
+        let x_a = g + &params.h1 * &credits + request.big_k;
         let a = x_a * exp.invert();
         let x_g = g * exp;
 
@@ -640,7 +662,12 @@ impl PrivateKey {
         let witness = vec![exp];
         let pok = prover.prove_compact(&witness, &mut rng).unwrap();
 
-        Ok(IssuanceResponse { a, e, c, pok })
+        Ok(IssuanceResponse {
+            a,
+            e,
+            c: credits,
+            pok,
+        })
     }
 }
 

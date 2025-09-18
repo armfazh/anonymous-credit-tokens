@@ -133,10 +133,10 @@ use rand_core::OsRng;
 // Client-side: Prepare for issuance
 let preissuance = PreIssuance::random(OsRng);
 let params = Params::new("example-org", "payment-api", "production", "2024-01-15");
-let issuance_request = preissuance.request(&params, OsRng);
+let credit_amount = Scalar::from(20u64);
+let issuance_request = preissuance.request(&params, &credit_amount, OsRng);
 
 // Server-side: Process the request (credit amount: 20)
-let credit_amount = Scalar::from(20u64);
 let issuance_response = private_key
     .issue(&params, &issuance_request, credit_amount, OsRng)
     .unwrap();
@@ -185,11 +185,12 @@ let private_key = PrivateKey::random(OsRng);
 // 2. User Registration/Credit Issuance
 // Client prepares for issuance
 let preissuance = PreIssuance::random(OsRng);
-let issuance_request = preissuance.request(&params, OsRng);
+let initial_credits = Scalar::from(40u64);
+let issuance_request = preissuance.request(&params, &initial_credits, OsRng);
 
 // Server issues 40 credits
 let issuance_response = private_key
-    .issue(&params, &issuance_request, Scalar::from(40u64), OsRng)
+    .issue(&params, &issuance_request, initial_credits, OsRng)
     .unwrap();
 
 // Client receives the credit token
