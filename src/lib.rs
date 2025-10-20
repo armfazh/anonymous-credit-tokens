@@ -113,7 +113,7 @@ pub enum Error {
 
 /// The bit length used for binary decomposition of values in range proofs.
 /// This defines the maximum value (2^128 - 1) that can be represented.
-pub const L: usize = 128;
+pub const L: usize = 10;
 
 mod transcript;
 use transcript::Transcript;

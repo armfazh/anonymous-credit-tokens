@@ -57,7 +57,8 @@ fn issuance_benchmark(c: &mut Criterion) {
                 let private_key = PrivateKey::random(OsRng);
                 let preissuance = PreIssuance::random(OsRng);
                 let issuance_request = preissuance.request(&params, OsRng);
-                let credit_amount = Scalar::from(thread_rng().gen_range(10..1000) as u64);
+                // let credit_amount = Scalar::from(thread_rng().gen_range(10..1000) as u64);
+                let credit_amount = Scalar::from(1000u64);
                 (
                     private_key,
                     Arc::clone(&params),
@@ -87,7 +88,8 @@ fn token_creation_benchmark(c: &mut Criterion) {
                 let private_key = PrivateKey::random(OsRng);
                 let preissuance = PreIssuance::random(OsRng);
                 let issuance_request = preissuance.request(&params, OsRng);
-                let credit_amount = Scalar::from(thread_rng().gen_range(10..1000) as u64);
+                // let credit_amount = Scalar::from(thread_rng().gen_range(10..1000) as u64);
+                let credit_amount = Scalar::from(1000u64);
                 let issuance_response = private_key
                     .issue(&params, &issuance_request, credit_amount, OsRng)
                     .unwrap();
@@ -128,7 +130,8 @@ fn spending_proof_benchmark(c: &mut Criterion) {
                 let issuance_request = preissuance.request(&params, OsRng);
 
                 // Random credit amount between 20 and 1000
-                let credit_amount = Scalar::from(thread_rng().gen_range(20..1000) as u64);
+                // let credit_amount = Scalar::from(thread_rng().gen_range(20..1000) as u64);
+                let credit_amount = Scalar::from(1000u64);
 
                 let issuance_response = private_key
                     .issue(&params, &issuance_request, credit_amount, OsRng)
@@ -175,7 +178,8 @@ fn refund_benchmark(c: &mut Criterion) {
                 let issuance_request = preissuance.request(&params, OsRng);
 
                 // Random credit amount between 20 and 1000
-                let credit_amount = Scalar::from(thread_rng().gen_range(20..1000) as u64);
+                // let credit_amount = Scalar::from(thread_rng().gen_range(20..1000) as u64);
+                let credit_amount = Scalar::from(1000u64);
 
                 let issuance_response = private_key
                     .issue(&params, &issuance_request, credit_amount, OsRng)
@@ -214,6 +218,7 @@ fn refund_benchmark(c: &mut Criterion) {
 fn refund_token_creation_benchmark(c: &mut Criterion) {
     // Precompute params
     let params = create_params();
+    let mut once = true;
 
     c.bench_function("refund_token_creation", |b| {
         b.iter_batched(
@@ -223,7 +228,8 @@ fn refund_token_creation_benchmark(c: &mut Criterion) {
                 let issuance_request = preissuance.request(&params, OsRng);
 
                 // Random credit amount between 20 and 1000
-                let credit_amount = Scalar::from(thread_rng().gen_range(20..1000) as u64);
+                // let credit_amount = Scalar::from(thread_rng().gen_range(20..1000) as u64);
+                let credit_amount = Scalar::from(1000u64);
 
                 let issuance_response = private_key
                     .issue(&params, &issuance_request, credit_amount, OsRng)
@@ -250,6 +256,26 @@ fn refund_token_creation_benchmark(c: &mut Criterion) {
 
                 let (spend_proof, prerefund) = credit_token.prove_spend(&params, charge, OsRng);
                 let refund = private_key.refund(&params, &spend_proof, OsRng).unwrap();
+
+                let tok = prerefund
+                    .to_credit_token(&params, &spend_proof, &refund, private_key.public())
+                    .unwrap();
+                if once {
+                    let req_bytes = issuance_request.to_cbor().unwrap();
+                    println!("req size: {}", req_bytes.len());
+                    let res_bytes = issuance_response.to_cbor().unwrap();
+                    println!("res size: {}", res_bytes.len());
+                    let cto_bytes = credit_token.to_cbor().unwrap();
+                    println!("tok size: {}", cto_bytes.len());
+                    let spp_bytes = spend_proof.to_cbor().unwrap();
+                    println!("spp size: {}", spp_bytes.len());
+                    let ref_bytes = refund.to_cbor().unwrap();
+                    println!("ref size: {}", ref_bytes.len());
+                    let tok_bytes = tok.to_cbor().unwrap();
+                    println!("tok size: {}", tok_bytes.len());
+                    once = false;
+                }
+
                 (
                     prerefund,
                     spend_proof,
